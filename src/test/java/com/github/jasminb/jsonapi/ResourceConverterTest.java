@@ -82,6 +82,8 @@ public class ResourceConverterTest {
 
 		byte[] convertedData = converter.writeObjectCollection(users);
 
+		System.out.println("Yup: " +  new String(convertedData));
+
 		Assert.assertNotNull(convertedData);
 		Assert.assertFalse(convertedData.length == 0);
 

@@ -15,7 +15,7 @@ public class Article {
 
 	private String title;
 
-	@Relationship(value = "author", resolve = true, relType = RelType.RELATED)
+	@Relationship(value = "author", resolve = true, relType = RelType.RELATED, include = true)
 	private Author author;
 
 	@Relationship(value = "comments", resolve = true)

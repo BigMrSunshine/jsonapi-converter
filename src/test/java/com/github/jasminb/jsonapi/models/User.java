@@ -22,7 +22,7 @@ public class User {
 	public String id;
 	public String name;
 
-	@Relationship("statuses")
+	@Relationship(value = "statuses", include = true)
 	private List<Status> statuses;
 
 	@Meta

@@ -482,15 +482,17 @@ public class ResourceConverter {
 	 * @throws IllegalAccessException
 	 */
 	public byte [] writeObject(Object object) throws JsonProcessingException, IllegalAccessException {
-		ObjectNode dataNode = getDataNode(object);
-		ObjectNode result = objectMapper.createObjectNode();
+		ObjectNode document = getDocument(object);
+		if(document.get(INCLUDED) != null && (document.get(INCLUDED)).size() == 0) {
+			// I think we could be compliant without removing this, but remove it anyway.
+			document.remove(INCLUDED);
+		}
 
-		result.set(DATA, dataNode);
-
-		return objectMapper.writeValueAsBytes(result);
+		return objectMapper.writeValueAsBytes(document);
 	}
 
-	private ObjectNode getDataNode(Object object) throws IllegalAccessException {
+	private ObjectNode getDocument(Object object) throws IllegalAccessException {
+
 
 		// Perform initial conversion
 		ObjectNode attributesNode = objectMapper.valueToTree(object);
@@ -504,8 +506,15 @@ public class ResourceConverter {
 			attributesNode.remove(metaField.getName());
 		}
 
+		ObjectNode document = objectMapper.createObjectNode();
 		// Handle resource identifier
 		ObjectNode dataNode = objectMapper.createObjectNode();
+		ArrayNode includedNodes = objectMapper.createArrayNode();
+
+
+		document.set(DATA, dataNode);
+		document.set(INCLUDED, includedNodes);
+
 		dataNode.put(TYPE, TYPE_ANNOTATIONS.get(object.getClass()).value());
 
 		String resourceId = (String) idField.get(object);
@@ -553,6 +562,11 @@ public class ResourceConverter {
 						relationshipDataNode.set(DATA, dataArrayNode);
 						relationshipsNode.set(relationshipName, relationshipDataNode);
 
+						if(relationship.include()) {
+							// TODO: Prevent circular references.
+							includedNodes.add(getDocument(relationshipObject).get(DATA));
+						}
+
 					} else {
 						String relationshipType = TYPE_ANNOTATIONS.get(relationshipObject.getClass()).value();
 						String idValue = (String) ID_MAP.get(relationshipObject.getClass()).get(relationshipObject);
@@ -566,6 +580,10 @@ public class ResourceConverter {
 						relationshipDataNode.set(DATA, identifierNode);
 
 						relationshipsNode.set(relationshipName, relationshipDataNode);
+						if(relationship.include()) {
+							// TODO: Prevent circular references.
+							includedNodes.add(getDocument(relationshipObject).get(DATA));
+						}
 					}
 				}
 
@@ -575,7 +593,7 @@ public class ResourceConverter {
 				dataNode.set(RELATIONSHIPS, relationshipsNode);
 			}
 		}
-		return dataNode;
+		return document;
 	}
 
 	/**
@@ -587,17 +605,26 @@ public class ResourceConverter {
 	 * @throws IllegalAccessException
 	 */
 	public <T> byte[] writeObjectCollection(Iterable<T> objects) throws JsonProcessingException, IllegalAccessException {
-		ArrayNode results = objectMapper.createArrayNode();
+		ArrayNode data = objectMapper.createArrayNode();
+		ArrayNode included = objectMapper.createArrayNode();
 
 		for(T object : objects) {
-			results.add(getDataNode(object));
+			ObjectNode document = getDocument(object);
+			data.add(document.get(DATA));
+			if(document.get(INCLUDED) != null && document.get(INCLUDED) instanceof  ArrayNode) {
+				// TODO: Included resources should only be included once, even if they are included
+				// across multiple resources.
+				included.addAll((ArrayNode) document.get(INCLUDED));
+			}
 		}
 
 		ObjectNode result = objectMapper.createObjectNode();
-		result.set(DATA, results);
+		result.set(DATA, data);
+		if(included.size() > 0) {
+			result.set(INCLUDED, included);
+		}
 		return objectMapper.writeValueAsBytes(result);
 	}
-
 
 	/**
 	 * Checks if provided type is registered with this converter instance.
